@@ -1,0 +1,137 @@
+=begin
+
+    ECalcFlares
+
+      author: elanthia online
+contributors: spiffyjr, nisugi
+        name: ECalcFlares
+        tags: mechanics
+     version: 1.0
+
+     Updated version of SCalcFlares by Spiffyjr.
+     TWC tracking works with attack, but not weapon techniques.
+
+  Version Control:
+    Major_change.feature_addition.bugfix
+  1.0.1 (2023-12-11):
+    Added attack tracking for ranged, barrage, flurry, wblade, cripple
+    Added flare tracking for briar, rot, terror, ghezyte, holyfire
+
+=end
+
+CharSettings['flares'] ||= Hash.new
+CharSettings['swings'] ||= Hash.new
+
+flare_types = {
+  'unleash an invisible burst of force'  => 'grapple',
+  'flares with a burst of flame'         => 'fire',
+  'releases a blast of vibrating energy' => 'vibe',
+  'unleashes a blast of sonic energy'    => 'sonic',
+}
+
+message = proc { |msg|
+  echo '-- ' + msg
+}
+
+item_flared = proc { |item, flare, increment|
+  if CharSettings['flares'][item].nil?
+    CharSettings['flares'][item] = Hash.new
+  end
+  if CharSettings['flares'][item][flare].nil?
+    CharSettings['flares'][item][flare] = 0
+  end
+  if increment
+    CharSettings['flares'][item][flare] += 1
+  else
+    CharSettings['flares'][item][flare]
+  end
+}
+
+report_flare = proc { |item, flare, increment|
+  count = item_flared.call(item, flare, increment)
+  swings = CharSettings['swings'][item]
+
+  message.call(sprintf('item: %s, flare: %s, swings: %d, procs: %d, percent: %2.2f%%', item, flare, swings, count, (count.to_f / swings.to_f) * 100.0))
+}
+
+if script.vars[0] =~ /^clear/i
+  CharSettings['flares'] = Hash.new
+  CharSettings['swings'] = Hash.new
+  message.call('cleared')
+elsif script.vars[0] =~ /^report/i
+  message.call('report')
+  items = CharSettings['flares'].keys
+  items.each { |item|
+    CharSettings['flares'][item].keys.each { |flare|
+      report_flare.call(item, flare, false)
+    }
+  }
+  exit
+end
+
+status_tags
+
+item = nil
+buffer = []
+
+while line = get # rubocop:disable Lint/AssignmentInCondition
+  if line =~ /You (?:thrust with|swing|attempt to (?:punch|grapple|jab)|(?:take aim and )?fire) an? ([^<]+) at <pushBold\/>(?:a|an) <a exist="\d+"/ # fire, attack, (jab, punch, grapple with held weapon)
+    item = $1
+  elsif line =~ /^Nocking another arrow to your bowstring, you swiftly draw back and loose again!/ # barrage
+    item = GameObj.left_hand.name
+  elsif line =~ /^With fluid motion, you guide your flashing blade, slicing toward the triton protector at the apex of its deadly arc!/ or line =~ /^Flowing with deadly grace, you smoothly reverse the direction of your blades and slash again!/ # flurry
+    item = GameObj.right_hand.name
+  elsif line =~ /^You reverse your grip on your <a exist="\d+" noun=".*">(.*)<\/a> and dart toward .*  at an angle!/ # cripple
+    item = $1
+  elsif line =~ /^With a broad flourish, you sweep your <a exist="\d+" noun=".*">(.*)<\/a> into a whirling display of keen-edged menace!/ # wblade
+    item = $1
+  elsif line =~ /^Roundtime: \d+/
+    if item
+      if GameObj.left_hand and item =~ /#{GameObj.left_hand.name}/
+        item = GameObj.left_hand.name
+      elsif GameObj.right_hand and item =~ /#{GameObj.right_hand.name}/
+        item = GameObj.right_hand.name
+      elsif GameObj.left_hand and item =~ /arrow|bolt/
+        item = GameObj.left_hand.name
+      else
+        echo ">> failed to find item match"
+        next
+      end
+
+      if not CharSettings['swings'][item]
+        CharSettings['swings'][item] = 0
+      end
+      CharSettings['swings'][item] += 1
+
+      buffer.each { |data| report_flare.call(data[:item], data[:flare], true) }
+
+      item = nil
+      buffer = []
+    end
+  end
+
+  if line =~ /\*\* Your <a exist="\d+" noun=".*">(.*)<\/a> (.*) at.*! \*\*/
+    flare_desc = $2.to_s
+    buffer.push({ item: $1.to_s, flare: flare_types[flare_desc] ? flare_types[flare_desc] : 'miscellaneous' })
+  elsif line =~ /\*\* Your <a exist="\d+" noun=".*">(.*)<\/a> pulses with a burst of plasma energy! \*\*/
+    buffer.push({ item: $1.to_s, flare: 'guiding light' })
+  elsif line =~ /\*\* Necrotic energy from your <a exist="\d+" noun=".*">(.*)<\/a> overflows into you\! \*\*/
+    buffer.push({ item: $1.to_s, flare: 'necrotic' })
+  elsif line =~ /With a loud snap, a blast of energy bursts from your <a exist="\d+" noun=".*">(.*)<\/a>/
+    buffer.push({ item: $1.to_s, flare: 'sonic2' })
+  elsif line =~ /\*\* Your <a exist="\d+" noun=".*">(.*)<\/a> bursts alight with leaping tongues of holy fire! \*\*/
+    buffer.push({ item: $1.to_s, flare: 'holy fire' })
+  elsif line =~ /\*\* Cords of plasma-veined grey mist seep from your <a exist="\d+" noun=".*">(.*)<\/a> .*! \*\*/
+    buffer.push({ item: $1.to_s, flare: 'ghezyte' })
+  elsif line =~ /\*\* A sickly green aura radiates from a <a exist="\d+" noun=".*">(.*)<\/a> .*! \*\*/
+    buffer.push({ item: $1.to_s, flare: 'rot' })
+  elsif line =~ /Vines of vicious briars whip out from your <a exist="\d+" noun=".*">(.*)<\/a>.*\./
+    buffer.push({ item: $1.to_s, flare: 'briar' })
+  elsif line =~ /\*\* A wave of wicked power surges forth from your <a exist="\d+" noun=".*">(.*)<\/a>.*\./ or line =~ /\*\* Your <a exist="\d+" noun=".*">(.*)<\/a> releases a distorted black shadow! \*\*/
+    buffer.push({ item: $1.to_s, flare: 'terror' })
+  elsif line =~ /\*\* A suffusion of frost flashes down the length of the <a exist="\d+" noun="\w+">(.*)<\/a> as a tongue of snow and ice lashes at.*!/ or line =~ /\*\* A thin stream of icy cold liquid shoots forth from your <a exist="\d+" noun="\w+">(.*)<\/a>, water droplets freezing instantly into razor sharp slivers as they sail toward.*and maim.*on impact! \*\*/
+    buffer.push({ item: $1.to_s, flare: 'cold' })
+  # elsif line =~ /\*\* From somewhere nearby, a snowball comes whizzing towards .*, splattering as it connects! \*\*/
+    # buffer.push({ item: , flare: 'snowball' })  need a way to verify weapon when it could be mainhand, offhand, or bow and weapon isn't included in flare message.
+  end
+end
