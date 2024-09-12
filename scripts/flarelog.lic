@@ -12,7 +12,6 @@
   ;flarelog window                    Toggles Wrayth window to display flare statistics.
   ;flarelog --flares=<flare>,<flare>  Choose which flares to display in the Wrayth window.
                                       ;flarelog --flares=lightning,briar,necromancy lore,holyfire,air_lore
-
  A few other commands
   ;eq FlareLog.save(true)         Force a save to the yaml file. Automatically does this on exit.
   ;eq FlareLog.damage_flares      Displays a list of damage flares currently implemented
@@ -36,6 +35,7 @@
       requires: Lich >= 5.10.0
 
   Needs: Crit tables error checked: Cold, Crush, Disintegrate, Fire, Lightning, Plasma, Puncture, Unbalance
+
   Improvements:
   v1.0.0 (09/12/2024)
     Initial launch
@@ -410,7 +410,7 @@ module FlareLog
       all_damage = []
 
       # prepare our data structure
-      flare_data.each do |_type, locations|
+      flare_data.each do |type, locations|
         next if type == :fatal || type == :fatal_concussion
 
         locations.each do |_location, rank_data|
@@ -521,7 +521,7 @@ module FlareLog
       all_damage = []
 
       # break down the data structure.
-      flare_data.each do |_type, locations|
+      flare_data.each do |type, locations|
         next if type == :fatal || type == :fatal_concussion
 
         locations.each do |_location, rank_data|
@@ -551,12 +551,12 @@ module FlareLog
       rank_5_9_percent = total_flares > 0 ? (rank_5_9_flares.to_f / total_flares * 100).round(2) : 0
 
       # Add the flare stats to the output
-      output += "<label id='#{flare}_1' value='#{flare}' left='10' height='16' width='150'/>"
-      output += "<label id='#{flare}_2' value='Count: #{total_flares} ' left='10' height='16' width='150'/>"
-      output += "<label id='#{flare}_3' value='Avg: #{avg_damage}' left='10' height='16' width='150'/>"
-      output += "<label id='#{flare}_4' value='Fatal: #{fatal_percent} pct' left='10' height='16' width='150'/>"
-      output += "<label id='#{flare}_5' value='5-9: #{rank_5_9_percent} pct' left='10' height='16' width='150'/>"
-      output += "<label id='#{flare}_line' value='' left='10' height='8' width='150'/>"
+      output += "<label id='#{flare_name}_1' value='#{flare_name}' left='10' height='16' width='150'/>"
+      output += "<label id='#{flare_name}_2' value='Count: #{total_flares} ' left='10' height='16' width='150'/>"
+      output += "<label id='#{flare_name}_3' value='Avg: #{avg_damage}' left='10' height='16' width='150'/>"
+      output += "<label id='#{flare_name}_4' value='Fatal: #{fatal_percent} pct' left='10' height='16' width='150'/>"
+      output += "<label id='#{flare_name}_5' value='5-9: #{rank_5_9_percent} pct' left='10' height='16' width='150'/>"
+      output += "<label id='#{flare_name}_line' value='' left='10' height='8' width='150'/>"
     end
 
     output += "</dialogData>"
@@ -599,7 +599,7 @@ module FlareLog
     when /You feel (\d+) mana surge into you/
       (@flarelog[flare.to_sym][:mana] ||= []) << $1.to_i
     end
-    _respond(Lich::Messaging.msg_format("info", " ** Recorded #{flare.gsub('_', ' ')} **")) if @flarelog[:debug] && !mod == 100
+    _respond(Lich::Messaging.msg_format("info", " ** Recorded #{flare.gsub('_', ' ')} **")) if @flarelog[:debug]
   end
 
   def self.parse_damage_flare(trigger, buffer)
